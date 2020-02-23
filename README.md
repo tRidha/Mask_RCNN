@@ -3,7 +3,7 @@
 
 We are attempting to create a system that given a 2D image, will estimate 6-DoF pose information for the cars in the image. This project is forked from an implementation of Mask-RCNN as our system will first pass the image through the CNN to extract features that we will then pass into our own model to regress the pose information. 
 
-Currently, we are only using bounding box information, but will improve by using mask information and other intermediary layer activations inside Mask-RCNN. Our work for the milestone can be seen in MilestoneDemo.py.
+Currently, we are only using bounding box information, but will improve by using mask information and other intermediary layer activations inside Mask-RCNN. Our work for the milestone can be seen in the Milestone Demo notebook, which is linked in the proposal.
 
 
 
