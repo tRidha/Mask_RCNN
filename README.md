@@ -1,3 +1,14 @@
+# Stanford CS 230 Project
+## Muhammad Aadil Khan, Marco De Leon-Fadok, Thariq Ridha
+
+We are attempting to create a system that given a 2D image, will estimate 6-DoF pose information for the cars in the image. This project is forked from an implementation of Mask-RCNN as our system will first pass the image through the CNN to extract features that we will then pass into our own model to regress the pose information. 
+
+Currently, we are only using bounding box information, but will improve by using mask information and other intermediary layer activations inside Mask-RCNN. Our work for the milestone can be seen in MilestoneDemo.py.
+
+
+
+Below is the README contents for Mask R-CNN
+
 # Mask R-CNN for Object Detection and Segmentation
 
 This is an implementation of [Mask R-CNN](https://arxiv.org/abs/1703.06870) on Python 3, Keras, and TensorFlow. The model generates bounding boxes and segmentation masks for each instance of an object in the image. It's based on Feature Pyramid Network (FPN) and a ResNet101 backbone.
