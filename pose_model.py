@@ -11,6 +11,12 @@ import csv
 class_names = []
 rcnn_model = 0 
 
+IMAGE_PATH = '../dataset/images'
+MASK_PATH = '../dataset/masks'
+
+TRAIN_CSV = 'train_new.csv'
+TEST_CSV = 'test_new.csv'
+
 # --------------------------------------- MASK R CNN SETUP --------------------------------------- #
 def init_mask_rcnn():
 	global rcnn_model
@@ -74,6 +80,25 @@ def init_mask_rcnn():
 	               'teddy bear', 'hair drier', 'toothbrush']
 
 # ---------------------------------------- Helper functions for training ---------------------------------------- #
+fx = 2304.5479
+fy = 2305.8757
+cx = 1686.2379
+cy = 1354.9849
+
+def pose_to_pixel(x, y, z):
+  K = np.array([[fx, 0, cx],
+                [0, fy, cy],
+                [0, 0, 1]])
+
+  R = np.array([[1, 0, 0, 0],
+                [0, 1, 0, 0,],
+                [0, 0, 1, 0]])
+
+  W = np.array([[x], [y], [z], [1]])
+
+  p = np.dot(np.dot(K, R), W)
+  p_z = p/z
+  return p_z
 
 def load_Y_values(csv_filename):
   # Given a csv file, will return a Y matrix containing all the pose information
@@ -82,30 +107,35 @@ def load_Y_values(csv_filename):
     filenames = []
     reader = csv.reader(csvfile)
     data = list(reader)[1:]
-    car_poses = []
+    file_examples = []
     for i in range(len(data)):
       list_of_params = data[i][1].split()
       examples = []
       k = 0
       while k < len(list_of_params):
-        examples.append(list_of_params[k+1:k+7])
+        pose = list_of_params[k+1:k+7]
+        pose = [float(i) for i in pose] 
+        examples.append(pose)
         k += 7
 
-      car_pose = min(examples,key=lambda x: x[5])
-      car_poses.append(car_pose)
+      examples = sorted(examples,key=lambda x: x[5])
+      file_examples.append(examples)
       filenames.append(str(data[i][0]) + '.jpg')
 
-    Y = np.asarray(car_poses).T
-    return Y, filenames
+    return file_examples, filenames
 
-def extract_bounding_box_info(rcnn_model, filenames, show_images = False):
+def extract_bounding_box_info(rcnn_model, filenames, file_examples, show_images = False):
   # Given a list of images, runs each image through the trained rcnn_model
   # to output a corresponding list of bounding box information for the
   # car closest to the camera for each image.
   car_class_id = class_names.index('car')
   X = np.zeros((len(filenames),1028))
 
+  x_train = []
+  y_train = []
+
   for k in range(len(filenames)):
+    print('')
     filename = filenames[k]
     # Load image
     image = skimage.io.imread(IMAGE_PATH + filename)
@@ -117,33 +147,56 @@ def extract_bounding_box_info(rcnn_model, filenames, show_images = False):
     # Run detection
     results = rcnn_model.detect([image], verbose=1)
     r = results[0]
-    car_rois = []
-    i = 0
-    lowest_y = 0
-    # Only process car images
-    while i < len(r['class_ids']):
-      if r['class_ids'][i] == car_class_id:
-        
-        y1,x1,y2,x2 = r['rois'][i]
-        height = image.shape[0]
-        width = image.shape[1]
-        center_x = (x1 + x2) // 2
-  
-        # This is jank but it removes from consideration the car the camera is mounted on
-        if not (y2 > height - 100 and center_x >= width * (1/3) and center_x <= width * (2/3)):
-          roi = r['rois'][i]
-          if roi[2] > lowest_y:
-            lowest_y = roi[2]
-            car_roi = roi
-            feature_vec = r['features'][i].flatten()
-      i += 1
-    
-    # For baseline, we will only consider cars that are closest to the camera (lowest-y value)
-    print("Processed Image " + str(k))
-    roi_and_features = np.concatenate([car_roi, feature_vec])
-    X[k] = roi_and_features
 
-  return X.T
+    rois = r['rois']
+    rois_with_index = []
+    for i in range(len(rois)):
+      rois_with_index.append((rois[i], i))
+    rois = sorted(rois_with_index, key = lambda item : item[0][3],reverse=True)
+    i = 0
+    cars_in_file = file_examples[k]
+
+    for ex in range(len(cars_in_file)):
+      x = cars_in_file[ex][3]
+      y = cars_in_file[ex][4]
+      z = cars_in_file[ex][5]
+      coordinates = pose_to_pixel(x, y, z)
+      x_proj = coordinates[0]
+      y_proj = coordinates[1]
+
+      print(coordinates)
+
+      seen_cars = []
+
+      for i in range(len(rois)):
+        if i in seen_cars:
+          continue
+        index = rois[i][1]
+        if r['class_ids'][index] == car_class_id:
+          y1,x1,y2,x2 = rois[i][0]
+          height = image.shape[0]
+          width = image.shape[1]
+          center_x = (x1 + x2) // 2
+
+          if not (y2 > height - 100 and center_x >= width * (1/3) and center_x <= width * (2/3)):
+            if x_proj > x1 and x_proj < x2 and y_proj > y1 and y_proj < y2:
+              tr_example = [x1, x2, y1, y2]
+              bounding_box = np.asarray([x1, x2, y1, y2])
+              feature_vec = r['features'][index].flatten()
+
+              tr_example = np.concatenate([bounding_box, feature_vec])
+              x_train.append(tr_example)
+              y_train.append(np.asarray(cars_in_file[ex]))
+              seen_cars.append(i)
+              break
+
+  
+    X = np.asarray(x_train).T
+    Y = np.asarray(y_train).T
+          
+        
+
+  return X, Y
 
 # ---------------------------------------- Model Implementation ---------------------------------------- #
 import tensorflow as tf
@@ -307,13 +360,12 @@ def main():
 			train_file = args[1]
 			test_file = args[2]
 			out_file = args[3]
-			# Construct training set
-			Y_train, tr_filenames = load_Y_values(train_file)
-			X_train = extract_bounding_box_info(rcnn_model, tr_filenames)
+			tr_file_examples, tr_filenames = load_Y_values(TRAIN_CSV)
+			X_train, Y_train = extract_bounding_box_info(rcnn_model, tr_filenames, tr_file_examples)
 
-			# Construct test set
-			Y_test, test_filenames = load_Y_values(test_file)
-			X_test = extract_bounding_box_info(rcnn_model, test_filenames)
+			test_file_examples, test_filenames = load_Y_values(TEST_CSV)
+			X_test, Y_test = extract_bounding_box_info(rcnn_model, test_filenames, test_file_examples)
+
 
 			np.savetxt(out_file + '_ytrain.csv', Y_train, delimiter = ',')
 			np.savetxt(out_file + '_xtrain.csv', X_train, delimiter = ',')
