@@ -14,8 +14,8 @@ rcnn_model = 0
 IMAGE_PATH = '../dataset/images'
 MASK_PATH = '../dataset/masks'
 
-TRAIN_CSV = 'train_new.csv'
-TEST_CSV = 'test_new.csv'
+TRAIN_CSV = '/train_new.csv'
+TEST_CSV = '/test_new.csv'
 
 # --------------------------------------- MASK R CNN SETUP --------------------------------------- #
 
@@ -136,10 +136,10 @@ def extract_bounding_box_info(rcnn_model, filenames, file_examples, show_images 
     filename = filenames[k]
     # Load image
     image = skimage.io.imread(IMAGE_PATH + filename)
-    # if (os.path.exists(MASK_PATH + filename)):
-    #   mask_image = skimage.io.imread(MASK_PATH + filename)
-    #   mask = mask_image > 128
-    #   image[mask] = 255
+    if (os.path.exists(MASK_PATH + filename)):
+      mask_image = skimage.io.imread(MASK_PATH + filename)
+      mask = mask_image > 128
+      image[mask] = 255
   
     # Run detection
     results = rcnn_model.detect([image], verbose=1)
