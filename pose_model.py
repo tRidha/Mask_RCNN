@@ -29,7 +29,7 @@ import mrcnn.model as modellib
 from mrcnn import visualize
 # Import COCO config
 sys.path.append("samples/coco/")  # To find local version
-import COCO
+import coco
 
 # Directory to save logs and trained model
 MODEL_DIR = os.path.join(ROOT_DIR, "logs")
@@ -349,11 +349,11 @@ def pose_model(X_train, Y_train, X_test, Y_test, learning_rate = 0.001,
 def main():
 	args = sys.argv[1:]
 
-	init_mask_rcnn()
+
 
 	if len(args) == 4:
 		if args[0] == '-preprocess':
-
+			init_mask_rcnn()
 			train_file = args[1]
 			test_file = args[2]
 			out_file = args[3]
@@ -368,6 +368,20 @@ def main():
 			np.savetxt(out_file + '_xtrain.csv', X_train, delimiter = ',')
 			np.savetxt(out_file + '_ytest.csv', Y_test, delimiter = ',')
 			np.savetxt(out_file + '_xtest.csv', X_test, delimiter = ',')
+
+	print(len(args))
+	if len(args) == 3:
+		if args[0] == '-train':
+			in_file = args[1]
+			out_file = args[2]
+			print('test')
+
+			Y_train = np.savetxt(in_file + '_ytrain.csv', delimiter = ',')
+			X_train = np.savetxt(in_file + '_xtrain.csv', delimiter = ',')
+			Y_test = np.savetxt(in_file + '_ytest.csv', delimiter = ',')
+			X_test = np.savetxt(in_file + '_xtest.csv', delimiter = ',')
+
+			parameters = pose_model(X_train, Y_train, X_test, Y_test)
 
 
 
