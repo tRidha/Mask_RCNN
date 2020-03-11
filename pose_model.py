@@ -11,16 +11,16 @@ import csv
 class_names = []
 rcnn_model = 0 
 
-IMAGE_PATH = '../dataset/images'
-MASK_PATH = '../dataset/masks'
+IMAGE_PATH = '../dataset/images/'
+MASK_PATH = '../dataset/masks/'
 
-TRAIN_CSV = '/train_new.csv'
-TEST_CSV = '/test_new.csv'
+TRAIN_CSV = 'train_new.csv'
+TEST_CSV = 'test_new.csv'
 
 # --------------------------------------- MASK R CNN SETUP --------------------------------------- #
 
 # Root directory of the project
-ROOT_DIR = os.path.abspath("/")
+ROOT_DIR = os.path.abspath("../")
 
 # Import Mask RCNN
 sys.path.append(ROOT_DIR)  # To find local version of the library
@@ -29,7 +29,7 @@ import mrcnn.model as modellib
 from mrcnn import visualize
 # Import COCO config
 sys.path.append("samples/coco/")  # To find local version
-import COCO
+import coco
 
 # Directory to save logs and trained model
 MODEL_DIR = os.path.join(ROOT_DIR, "logs")
@@ -132,7 +132,7 @@ def extract_bounding_box_info(rcnn_model, filenames, file_examples, show_images 
   y_train = []
 
   for k in range(len(filenames)):
-    print('')
+    print("Loading image " + str(k))
     filename = filenames[k]
     # Load image
     image = skimage.io.imread(IMAGE_PATH + filename)
@@ -142,7 +142,7 @@ def extract_bounding_box_info(rcnn_model, filenames, file_examples, show_images 
       image[mask] = 255
   
     # Run detection
-    results = rcnn_model.detect([image], verbose=1)
+    results = rcnn_model.detect([image])
     r = results[0]
 
     rois = r['rois']
@@ -160,8 +160,6 @@ def extract_bounding_box_info(rcnn_model, filenames, file_examples, show_images 
       coordinates = pose_to_pixel(x, y, z)
       x_proj = coordinates[0]
       y_proj = coordinates[1]
-
-      print(coordinates)
 
       seen_cars = []
 
@@ -187,9 +185,10 @@ def extract_bounding_box_info(rcnn_model, filenames, file_examples, show_images 
               seen_cars.append(i)
               break
 
-  
-    X = np.asarray(x_train).T
-    Y = np.asarray(y_train).T
+    print("Processed image " + str(k) + " and " + str(len(x_train)) + " cars.")
+    
+  X = np.asarray(x_train).T
+  Y = np.asarray(y_train).T
           
         
 
@@ -348,8 +347,6 @@ def pose_model(X_train, Y_train, X_test, Y_test, learning_rate = 0.001,
 
 def main():
 	args = sys.argv[1:]
-
-	init_mask_rcnn()
 
 	if len(args) == 4:
 		if args[0] == '-preprocess':
