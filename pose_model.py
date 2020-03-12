@@ -214,19 +214,36 @@ def create_placeholders(n_x, n_y):
 def initialize_parameters():
     
     tf.set_random_seed(1)                   
-    W1 = tf.get_variable("W1", [1024,1028], initializer = tf.contrib.layers.xavier_initializer(seed = 1))
+    W1 = tf.get_variable("W1", [1024,1024], initializer = tf.contrib.layers.xavier_initializer(seed = 1))
     b1 = tf.get_variable("b1", [1024,1], initializer = tf.zeros_initializer())
     W2 = tf.get_variable("W2", [1024,1024], initializer = tf.contrib.layers.xavier_initializer(seed = 2))
     b2 = tf.get_variable("b2", [1024,1], initializer = tf.zeros_initializer())
-    W3 = tf.get_variable("W3", [6,1024], initializer = tf.contrib.layers.xavier_initializer(seed = 3))
-    b3 = tf.get_variable("b3", [6,1], initializer = tf.zeros_initializer())
+    W3 = tf.get_variable("W3", [3,1024], initializer = tf.contrib.layers.xavier_initializer(seed = 3))
+    b3 = tf.get_variable("b3", [3,1], initializer = tf.zeros_initializer())
+
+    W4 = tf.get_variable("W4", [100,4], initializer = tf.contrib.layers.xavier_initializer(seed = 4))
+    b4 = tf.get_variable("b4", [100,1], initializer = tf.zeros_initializer())
+    W5 = tf.get_variable("W5", [100,100], initializer = tf.contrib.layers.xavier_initializer(seed = 5))
+    b5 = tf.get_variable("b5", [100,1], initializer = tf.zeros_initializer())
+    W6 = tf.get_variable("W6", [100,1024], initializer = tf.contrib.layers.xavier_initializer(seed = 6))
+    b6 = tf.get_variable("b6", [100,1], initializer = tf.zeros_initializer())
+    W7 = tf.get_variable("W7", [3,200], initializer = tf.contrib.layers.xavier_initializer(seed = 7))
+    b7 = tf.get_variable("b7", [3,1], initializer = tf.zeros_initializer())
 
     parameters = {"W1": W1,
                   "b1": b1,
                   "W2": W2,
                   "b2": b2,
                   "W3": W3,
-                  "b3": b3}
+                  "b3": b3,
+                  "W4": W4,
+                  "b4": b4,
+                  "W5": W5,
+                  "b5": b5,
+                  "W6": W6,
+                  "b6": b6,
+                  "W7": W7,
+                  "b7": b7}
     
     return parameters
 
@@ -238,14 +255,45 @@ def forward_propagation(X, parameters):
     b2 = parameters['b2']
     W3 = parameters['W3']
     b3 = parameters['b3']
-                  
-    Z1 = tf.add(tf.matmul(W1, X), b1)
-    A1 = tf.nn.tanh(Z1)   
+
+    W4 = parameters['W4']
+    b4 = parameters['b4']
+    W5 = parameters['W5']
+    b5 = parameters['b5']
+    W6 = parameters['W6']
+    b6 = parameters['b6']
+    W7 = parameters['W7']
+    b7 = parameters['b7']
+
+
+
+
+
+    Xr = X[4:]
+    Xt = X[:4]
+    
+
+
+    Z1 = tf.add(tf.matmul(W1, Xr), b1)
+    A1 = tf.tanh(Z1)   
     Z2 = tf.add(tf.matmul(W2, A1), b2)
     A2 = tf.nn.relu(Z2)
-    Z3 = tf.add(tf.matmul(W3, A2), b3)                                            
+    Z3 = tf.add(tf.matmul(W3, A2), b3)
+
+    Z4 = tf.add(tf.matmul(W4, Xt), b4)
+    A4 = tf.tanh(Z4)
+    Z5 = tf.add(tf.matmul(W5, A4), b5)
+    A5 = tf.nn.relu(Z5)
+    Z6 = tf.add(tf.matmul(W6, A2), b6)
+    A6 = tf.nn.relu(Z6)
+    concat = tf.concat([A5, A6], axis = 0)
+    Z7 = tf.add(tf.matmul(W7, concat), b7)
+
+
+    Y_hat = tf.concat([Z3, Z7], axis = 0)
+
                                                 
-    return Z3
+    return Y_hat
 
 def compute_cost(Z3, Y, threshold = 2.8):
   
@@ -332,16 +380,12 @@ def pose_model(X_train, Y_train, X_test, Y_test, learning_rate = 0.001,
         # accuracy = tf.reduce_mean(tf.cast(correct_prediction, "float"))
 
 
-        correct_rot = tf.cast(tf.less(tf.squared_difference(Z3[:3], Y[:3]), [1]), "float")
+        correct_rot = tf.cast(tf.less(tf.squared_difference(Z3[:3], Y[:3]), [0.8]), "float")
         correct_trans = tf.cast(tf.less(tf.squared_difference(Z3[3:], Y[3:]), [2.7]), "float")
-        accuracy = tf.reduce_mean(tf.cast(correct_trans * correct_rot, "float"))
+        accuracy = tf.reduce_mean(tf.cast(correct_trans, "float"))
 
         print ("Train Mean Squared Difference:", accuracy.eval({X: X_train, Y: Y_train}))
-        print ("Train:", Z3[5].eval({X: X_train, Y: Y_train}))
-        print(Y_train[5])
         print ("Test Mean Squared Difference:", accuracy.eval({X: X_test, Y: Y_test}))
-        print ("Test:", Z3[5].eval({X: X_test, Y: Y_test}))
-        print(Y_test[5])
         
         return parameters
 
@@ -366,19 +410,22 @@ def main():
 			np.savetxt(out_file + '_ytest.csv', Y_test, delimiter = ',')
 			np.savetxt(out_file + '_xtest.csv', X_test, delimiter = ',')
 
-	print(len(args))
 	if len(args) == 3:
 		if args[0] == '-train':
 			in_file = args[1]
 			out_file = args[2]
-			print('test')
+			print('Loading training data files...\n')
 
-			Y_train = np.savetxt(in_file + '_ytrain.csv', delimiter = ',')
-			X_train = np.savetxt(in_file + '_xtrain.csv', delimiter = ',')
-			Y_test = np.savetxt(in_file + '_ytest.csv', delimiter = ',')
-			X_test = np.savetxt(in_file + '_xtest.csv', delimiter = ',')
+			Y_train = np.loadtxt(in_file + '_ytrain.csv', delimiter = ',')
+			X_train = np.loadtxt(in_file + '_xtrain.csv', delimiter = ',')
+			Y_test = np.loadtxt(in_file + '_ytest.csv', delimiter = ',')
+			X_test = np.loadtxt(in_file + '_xtest.csv', delimiter = ',')
+			print('Files loaded!')
+			print('Training model...')
 
-			parameters = pose_model(X_train, Y_train, X_test, Y_test)
+
+
+			parameters = pose_model(X_train, Y_train, X_test, Y_test, learning_rate = 0.001, num_epochs = 5000)
 
 
 
