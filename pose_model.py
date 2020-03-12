@@ -158,8 +158,10 @@ def extract_bounding_box_info(rcnn_model, filenames, file_examples, show_images 
       y = cars_in_file[ex][4]
       z = cars_in_file[ex][5]
       coordinates = pose_to_pixel(x, y, z)
-      x_proj = coordinates[0]
-      y_proj = coordinates[1]
+
+      #normalize
+      x_proj = (coordinates[0] - (width/2)) / (width/2)
+      y_proj = (coordinates[1] - (height/2)) / (height/2)
 
       seen_cars = []
 
@@ -171,12 +173,21 @@ def extract_bounding_box_info(rcnn_model, filenames, file_examples, show_images 
           y1,x1,y2,x2 = rois[i][0]
           height = image.shape[0]
           width = image.shape[1]
-          center_x = (x1 + x2) // 2
 
-          if not (y2 > height - 100 and center_x >= width * (1/3) and center_x <= width * (2/3)):
+          # normalize
+          x1 = (x1 - (width/2)) / (width/2)
+          x2 = (x2 - (width/2)) / (width/2)
+          y1 = (y1 - (height/2)) / (height/2)
+          y2 = (y2 - (height/2)) / (height/2)
+          center_x = (x1 + x2) / 2
+          center_y = (y1 + y2) / 2
+          area = (x2 - x1) * (y2 - y1)
+          width_to_height_ratio = (x2 - x1) / (y2 - y1)
+
+          # Removes the camera car from consideration
+          if not (y2 > 0.9 and center_x >= -.5 and center_x <= 0.5:
             if x_proj > x1 and x_proj < x2 and y_proj > y1 and y_proj < y2:
-              tr_example = [x1, x2, y1, y2]
-              bounding_box = np.asarray([x1, x2, y1, y2])
+              bounding_box = np.asarray([x1, x2, y1, y2, center_x, center_y, area, width_to_height_ratio])
               feature_vec = r['features'][index].flatten()
 
               tr_example = np.concatenate([bounding_box, feature_vec])
@@ -214,7 +225,7 @@ def create_placeholders(n_x, n_y):
 def initialize_parameters():
     
     tf.set_random_seed(1)                   
-    W1 = tf.get_variable("W1", [1024,1024], initializer = tf.contrib.layers.xavier_initializer(seed = 1))
+    W1 = tf.get_variable("W1", [1024,1032], initializer = tf.contrib.layers.xavier_initializer(seed = 1))
     b1 = tf.get_variable("b1", [1024,1], initializer = tf.zeros_initializer())
     W2 = tf.get_variable("W2", [1024,1024], initializer = tf.contrib.layers.xavier_initializer(seed = 2))
     b2 = tf.get_variable("b2", [1024,1], initializer = tf.zeros_initializer())
@@ -265,14 +276,8 @@ def forward_propagation(X, parameters):
     W7 = parameters['W7']
     b7 = parameters['b7']
 
-
-
-
-
-    Xr = X[4:]
-    Xt = X[:4]
-    
-
+    Xr = X
+    Xt = X[:8]
 
     Z1 = tf.add(tf.matmul(W1, Xr), b1)
     A1 = tf.tanh(Z1)   
