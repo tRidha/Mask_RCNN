@@ -140,6 +140,9 @@ def extract_bounding_box_info(rcnn_model, filenames, file_examples, show_images 
       mask_image = skimage.io.imread(MASK_PATH + filename)
       mask = mask_image > 128
       image[mask] = 255
+
+    height = image.shape[0]
+    width = image.shape[1]
   
     # Run detection
     results = rcnn_model.detect([image])
@@ -171,8 +174,6 @@ def extract_bounding_box_info(rcnn_model, filenames, file_examples, show_images 
         index = rois[i][1]
         if r['class_ids'][index] == car_class_id:
           y1,x1,y2,x2 = rois[i][0]
-          height = image.shape[0]
-          width = image.shape[1]
 
           # normalize
           x1 = (x1 - (width/2)) / (width/2)
@@ -185,7 +186,7 @@ def extract_bounding_box_info(rcnn_model, filenames, file_examples, show_images 
           width_to_height_ratio = (x2 - x1) / (y2 - y1)
 
           # Removes the camera car from consideration
-          if not (y2 > 0.9 and center_x >= -.5 and center_x <= 0.5:
+          if not (y2 > 0.9 and center_x >= -.5 and center_x <= 0.5):
             if x_proj > x1 and x_proj < x2 and y_proj > y1 and y_proj < y2:
               bounding_box = np.asarray([x1, x2, y1, y2, center_x, center_y, area, width_to_height_ratio])
               feature_vec = r['features'][index].flatten()
@@ -399,7 +400,6 @@ def main():
 
 	if len(args) == 4:
 		if args[0] == '-preprocess':
-			init_mask_rcnn()
 			train_file = args[1]
 			test_file = args[2]
 			out_file = args[3]
