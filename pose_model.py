@@ -7,7 +7,7 @@ import skimage.io
 import matplotlib
 import matplotlib.pyplot as plt
 import csv
-import quaternion
+from squaternion import euler2quat, quat2euler, Quaternion
 
 class_names = []
 rcnn_model = 0 
@@ -19,13 +19,8 @@ TRAIN_CSV = 'train_new.csv'
 TEST_CSV = 'test_new.csv'
 
 # --------------------------------------- MASK R CNN SETUP --------------------------------------- #
-class InferenceConfig(coco.CocoConfig):
-    # Set batch size to 1 since we'll be running inference on
-    # one image at a time. Batch size = GPU_COUNT * IMAGES_PER_GPU
-    GPU_COUNT = 1
-    IMAGES_PER_GPU = 1
-
 def init_maskrcnn():
+  global class_names, rcnn_model
   # Root directory of the project
   ROOT_DIR = os.path.abspath("../")
 
@@ -49,6 +44,12 @@ def init_maskrcnn():
 
   # Directory of images to run detection on
   IMAGE_DIR = os.path.join(ROOT_DIR, "images")
+
+  class InferenceConfig(coco.CocoConfig):
+    # Set batch size to 1 since we'll be running inference on
+    # one image at a time. Batch size = GPU_COUNT * IMAGES_PER_GPU
+    GPU_COUNT = 1
+    IMAGES_PER_GPU = 1
 
   config = InferenceConfig()
 
@@ -114,8 +115,9 @@ def load_Y_values(csv_filename):
         pose = list_of_params[k+1:k+7]
         pose = [float(i) for i in pose]
         translation = pose[3:]
-        euler_rot = np.asarray(pose[:3])
-        quaternion_rot = euler_to_quaternion(euler_rot, 'zyx').tolist()
+        eulers = pose[:3]
+        # parameters are ordered roll, pitch, yaw (input dataset is yaw, pitch, roll)
+        quaternion_rot = list(euler2quat(eulers[2], eulers[1], eulers[0]))
         examples.append(quaternion_rot + translation)
         k += 7
 
@@ -161,9 +163,9 @@ def extract_bounding_box_info(rcnn_model, filenames, file_examples, show_images 
     cars_in_file = file_examples[k]
 
     for ex in range(len(cars_in_file)):
-      x = cars_in_file[ex][3]
-      y = cars_in_file[ex][4]
-      z = cars_in_file[ex][5]
+      x = cars_in_file[ex][4]
+      y = cars_in_file[ex][5]
+      z = cars_in_file[ex][6]
       coordinates = pose_to_pixel(x, y, z)
 
       #normalize
@@ -234,7 +236,7 @@ def initialize_parameters():
     b1 = tf.get_variable("b1", [1024,1], initializer = tf.zeros_initializer())
     W2 = tf.get_variable("W2", [1024,1024], initializer = tf.contrib.layers.xavier_initializer(seed = 2))
     b2 = tf.get_variable("b2", [1024,1], initializer = tf.zeros_initializer())
-    W3 = tf.get_variable("W3", [3,1024], initializer = tf.contrib.layers.xavier_initializer(seed = 3))
+    W3 = tf.get_variable("W3", [4,1024], initializer = tf.contrib.layers.xavier_initializer(seed = 3))
     b3 = tf.get_variable("b3", [4,1], initializer = tf.zeros_initializer())
 
     W4 = tf.get_variable("W4", [100,8], initializer = tf.contrib.layers.xavier_initializer(seed = 4))
@@ -325,8 +327,8 @@ def compute_cost(Z3, Y, alpha = 0.5, threshold = 2.8):
     return cost
 
 def eval_accuracy(X, Y, Y_hat, X_train, Y_train, X_test, Y_test, t_treshold, r_threshold):
-  correct_rot = tf.cast(tf.less(tf.squared_difference(Y_hat[:3], Y[:3]), [r_threshold]), "float")
-  correct_trans = tf.cast(tf.less(tf.squared_difference(Y_hat[3:], Y[3:]), [t_treshold]), "float")
+  correct_rot = tf.cast(tf.less(tf.square(tf.norm(Y[:4] - Y_hat[:4], axis = 0)), [r_threshold]), "float")
+  correct_trans = tf.cast(tf.less(tf.square(tf.norm(Y[4:] - Y_hat[4:], axis = 0)), [t_treshold]), "float")
   t_accuracy = tf.reduce_mean(tf.cast(correct_trans, "float"))
   r_accuracy = tf.reduce_mean(tf.cast(correct_rot, "float"))
   accuracy = tf.reduce_mean(tf.cast(correct_trans * correct_rot, "float"))
@@ -365,7 +367,6 @@ def pose_model(X_train, Y_train, X_test, Y_test, learning_rate = 0.001,
     optimizer = tf.train.AdamOptimizer(learning_rate = learning_rate).minimize(cost)
   
     init = tf.global_variables_initializer()
-
   
     with tf.Session() as sess:
         
@@ -414,42 +415,39 @@ def pose_model(X_train, Y_train, X_test, Y_test, learning_rate = 0.001,
         return parameters
 
 def main():
-	args = sys.argv[1:]
+  args = sys.argv[1:]
 
-	if len(args) == 4:
-		if args[0] == '-preprocess':
+  if len(args) == 4:
+    if args[0] == '-preprocess':
       init_maskrcnn()
-			train_file = args[1]
-			test_file = args[2]
-			out_file = args[3]
-			tr_file_examples, tr_filenames = load_Y_values(TRAIN_CSV)
-			X_train, Y_train = extract_bounding_box_info(rcnn_model, tr_filenames, tr_file_examples)
+      train_file = args[1]
+      test_file = args[2]
+      out_file = args[3]
+      tr_file_examples, tr_filenames = load_Y_values(TRAIN_CSV)
+      X_train, Y_train = extract_bounding_box_info(rcnn_model, tr_filenames, tr_file_examples)
 
-			test_file_examples, test_filenames = load_Y_values(TEST_CSV)
-			X_test, Y_test = extract_bounding_box_info(rcnn_model, test_filenames, test_file_examples)
+      test_file_examples, test_filenames = load_Y_values(TEST_CSV)
+      X_test, Y_test = extract_bounding_box_info(rcnn_model, test_filenames, test_file_examples)
 
+      np.savetxt(out_file + '_ytrain.csv', Y_train, delimiter = ',')
+      np.savetxt(out_file + '_xtrain.csv', X_train, delimiter = ',')
+      np.savetxt(out_file + '_ytest.csv', Y_test, delimiter = ',')
+      np.savetxt(out_file + '_xtest.csv', X_test, delimiter = ',')
 
-			np.savetxt(out_file + '_ytrain.csv', Y_train, delimiter = ',')
-			np.savetxt(out_file + '_xtrain.csv', X_train, delimiter = ',')
-			np.savetxt(out_file + '_ytest.csv', Y_test, delimiter = ',')
-			np.savetxt(out_file + '_xtest.csv', X_test, delimiter = ',')
+  if len(args) == 3:
+    if args[0] == '-train':
+      in_file = args[1]
+      out_file = args[2]
+      print('Loading training data files...\n')
 
-	if len(args) == 3:
-		if args[0] == '-train':
-			in_file = args[1]
-			out_file = args[2]
-			print('Loading training data files...\n')
+      Y_train = np.loadtxt(in_file + '_ytrain.csv', delimiter = ',')
+      X_train = np.loadtxt(in_file + '_xtrain.csv', delimiter = ',')
+      Y_test = np.loadtxt(in_file + '_ytest.csv', delimiter = ',')
+      X_test = np.loadtxt(in_file + '_xtest.csv', delimiter = ',')
+      print('Files loaded!')
+      print('Training model...')
 
-			Y_train = np.loadtxt(in_file + '_ytrain.csv', delimiter = ',')
-			X_train = np.loadtxt(in_file + '_xtrain.csv', delimiter = ',')
-			Y_test = np.loadtxt(in_file + '_ytest.csv', delimiter = ',')
-			X_test = np.loadtxt(in_file + '_xtest.csv', delimiter = ',')
-			print('Files loaded!')
-			print('Training model...')
-
-
-
-			parameters = pose_model(X_train, Y_train, X_test, Y_test, learning_rate = 0.001, num_epochs = 10000)
+      parameters = pose_model(X_train, Y_train, X_test, Y_test, learning_rate = 0.001, num_epochs = 10000)
 
 
 
