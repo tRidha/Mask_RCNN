@@ -18,63 +18,63 @@ TRAIN_CSV = 'train_new.csv'
 TEST_CSV = 'test_new.csv'
 
 # --------------------------------------- MASK R CNN SETUP --------------------------------------- #
-
-# Root directory of the project
-ROOT_DIR = os.path.abspath("../")
-
-# Import Mask RCNN
-sys.path.append(ROOT_DIR)  # To find local version of the library
-from mrcnn import utils
-import mrcnn.model as modellib
-from mrcnn import visualize
-# Import COCO config
-sys.path.append("samples/coco/")  # To find local version
-import coco
-
-# Directory to save logs and trained model
-MODEL_DIR = os.path.join(ROOT_DIR, "logs")
-
-# Local path to trained weights file
-COCO_MODEL_PATH = os.path.join(ROOT_DIR, "mask_rcnn_coco.h5")
-# Download COCO trained weights from Releases if needed
-if not os.path.exists(COCO_MODEL_PATH):
-    utils.download_trained_weights(COCO_MODEL_PATH)
-
-# Directory of images to run detection on
-IMAGE_DIR = os.path.join(ROOT_DIR, "images")
-
 class InferenceConfig(coco.CocoConfig):
     # Set batch size to 1 since we'll be running inference on
     # one image at a time. Batch size = GPU_COUNT * IMAGES_PER_GPU
     GPU_COUNT = 1
     IMAGES_PER_GPU = 1
 
-config = InferenceConfig()
+def init_maskrcnn():
+  # Root directory of the project
+  ROOT_DIR = os.path.abspath("../")
 
-# Create model object in inference mode.
-rcnn_model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR, config=config)
+  # Import Mask RCNN
+  sys.path.append(ROOT_DIR)  # To find local version of the library
+  from mrcnn import utils
+  import mrcnn.model as modellib
+  from mrcnn import visualize
+  # Import COCO config
+  sys.path.append("samples/coco/")  # To find local version
+  import coco
 
-# Load weights trained on MS-COCO
-rcnn_model.load_weights(COCO_MODEL_PATH, by_name=True)
+  # Directory to save logs and trained model
+  MODEL_DIR = os.path.join(ROOT_DIR, "logs")
 
-# COCO Class names
-# Index of the class in the list is its ID. For example, to get ID of
-# the teddy bear class, use: class_names.index('teddy bear')
-class_names = ['BG', 'person', 'bicycle', 'car', 'motorcycle', 'airplane',
-               'bus', 'train', 'truck', 'boat', 'traffic light',
-               'fire hydrant', 'stop sign', 'parking meter', 'bench', 'bird',
-               'cat', 'dog', 'horse', 'sheep', 'cow', 'elephant', 'bear',
-               'zebra', 'giraffe', 'backpack', 'umbrella', 'handbag', 'tie',
-               'suitcase', 'frisbee', 'skis', 'snowboard', 'sports ball',
-               'kite', 'baseball bat', 'baseball glove', 'skateboard',
-               'surfboard', 'tennis racket', 'bottle', 'wine glass', 'cup',
-               'fork', 'knife', 'spoon', 'bowl', 'banana', 'apple',
-               'sandwich', 'orange', 'broccoli', 'carrot', 'hot dog', 'pizza',
-               'donut', 'cake', 'chair', 'couch', 'potted plant', 'bed',
-               'dining table', 'toilet', 'tv', 'laptop', 'mouse', 'remote',
-               'keyboard', 'cell phone', 'microwave', 'oven', 'toaster',
-               'sink', 'refrigerator', 'book', 'clock', 'vase', 'scissors',
-               'teddy bear', 'hair drier', 'toothbrush']
+  # Local path to trained weights file
+  COCO_MODEL_PATH = os.path.join(ROOT_DIR, "mask_rcnn_coco.h5")
+  # Download COCO trained weights from Releases if needed
+  if not os.path.exists(COCO_MODEL_PATH):
+      utils.download_trained_weights(COCO_MODEL_PATH)
+
+  # Directory of images to run detection on
+  IMAGE_DIR = os.path.join(ROOT_DIR, "images")
+
+  config = InferenceConfig()
+
+  # Create model object in inference mode.
+  rcnn_model = modellib.MaskRCNN(mode="inference", model_dir=MODEL_DIR, config=config)
+
+  # Load weights trained on MS-COCO
+  rcnn_model.load_weights(COCO_MODEL_PATH, by_name=True)
+
+  # COCO Class names
+  # Index of the class in the list is its ID. For example, to get ID of
+  # the teddy bear class, use: class_names.index('teddy bear')
+  class_names = ['BG', 'person', 'bicycle', 'car', 'motorcycle', 'airplane',
+                 'bus', 'train', 'truck', 'boat', 'traffic light',
+                 'fire hydrant', 'stop sign', 'parking meter', 'bench', 'bird',
+                 'cat', 'dog', 'horse', 'sheep', 'cow', 'elephant', 'bear',
+                 'zebra', 'giraffe', 'backpack', 'umbrella', 'handbag', 'tie',
+                 'suitcase', 'frisbee', 'skis', 'snowboard', 'sports ball',
+                 'kite', 'baseball bat', 'baseball glove', 'skateboard',
+                 'surfboard', 'tennis racket', 'bottle', 'wine glass', 'cup',
+                 'fork', 'knife', 'spoon', 'bowl', 'banana', 'apple',
+                 'sandwich', 'orange', 'broccoli', 'carrot', 'hot dog', 'pizza',
+                 'donut', 'cake', 'chair', 'couch', 'potted plant', 'bed',
+                 'dining table', 'toilet', 'tv', 'laptop', 'mouse', 'remote',
+                 'keyboard', 'cell phone', 'microwave', 'oven', 'toaster',
+                 'sink', 'refrigerator', 'book', 'clock', 'vase', 'scissors',
+                 'teddy bear', 'hair drier', 'toothbrush']
 
 # ---------------------------------------- Helper functions for training ---------------------------------------- #
 fx = 2304.5479
@@ -233,7 +233,7 @@ def initialize_parameters():
     W3 = tf.get_variable("W3", [3,1024], initializer = tf.contrib.layers.xavier_initializer(seed = 3))
     b3 = tf.get_variable("b3", [3,1], initializer = tf.zeros_initializer())
 
-    W4 = tf.get_variable("W4", [100,4], initializer = tf.contrib.layers.xavier_initializer(seed = 4))
+    W4 = tf.get_variable("W4", [100,8], initializer = tf.contrib.layers.xavier_initializer(seed = 4))
     b4 = tf.get_variable("b4", [100,1], initializer = tf.zeros_initializer())
     W5 = tf.get_variable("W5", [100,100], initializer = tf.contrib.layers.xavier_initializer(seed = 5))
     b5 = tf.get_variable("b5", [100,1], initializer = tf.zeros_initializer())
@@ -301,7 +301,7 @@ def forward_propagation(X, parameters):
                                                 
     return Y_hat
 
-def compute_cost(Z3, Y, threshold = 2.8):
+def compute_cost(Z3, Y, alpha = 0.5, threshold = 2.8):
   
     t_hat = Z3[3:6]
     t = Y[3:6]
@@ -315,10 +315,32 @@ def compute_cost(Z3, Y, threshold = 2.8):
 
     r_cost = tf.squared_difference(r, r_hat)
 
-    cost = tf.reduce_mean(t_cost + r_cost)
+    cost = tf.reduce_mean(((1-alpha) * t_cost) + (alpha * r_cost))
     #cost = tf.reduce_mean(tf.nn.cross_entropy_with_logits(logits = logits, labels = labels))
     
     return cost
+
+def eval_accuracy(X, Y, Y_hat, X_train, Y_train, X_test, Y_test, t_treshold, r_threshold):
+  correct_rot = tf.cast(tf.less(tf.squared_difference(Y_hat[:3], Y[:3]), [r_threshold]), "float")
+  correct_trans = tf.cast(tf.less(tf.squared_difference(Y_hat[3:], Y[3:]), [t_treshold]), "float")
+  t_accuracy = tf.reduce_mean(tf.cast(correct_trans, "float"))
+  r_accuracy = tf.reduce_mean(tf.cast(correct_rot, "float"))
+  accuracy = tf.reduce_mean(tf.cast(correct_trans * correct_rot, "float"))
+
+  print('\n--------------')
+  print("Evaluating accuracy with rotation threshold of " + str(r_threshold) + " and translation treshold of " + str(t_treshold))
+  print('')
+  print ("Train Accuracy:", accuracy.eval({X: X_train, Y: Y_train}))
+  print ("Test Accuracy:", accuracy.eval({X: X_test, Y: Y_test}))
+  print('')
+
+  print ("Train Accuracy on just translation:", t_accuracy.eval({X: X_train, Y: Y_train}))
+  print ("Test Accuracy on just translation:", t_accuracy.eval({X: X_test, Y: Y_test}))
+  print('')
+
+  print ("Train Accuracy on just rotation:", r_accuracy.eval({X: X_train, Y: Y_train}))
+  print ("Test Accuracy on just rotation:", r_accuracy.eval({X: X_test, Y: Y_test}))
+  print('\n--------------')
 
 def pose_model(X_train, Y_train, X_test, Y_test, learning_rate = 0.001,
           num_epochs = 1000, print_cost = True):
@@ -334,8 +356,8 @@ def pose_model(X_train, Y_train, X_test, Y_test, learning_rate = 0.001,
   
     X, Y = create_placeholders(n_x, n_y)
     parameters = initialize_parameters()
-    Z3 = forward_propagation(X, parameters)
-    cost = compute_cost(Z3, Y)
+    Y_hat = forward_propagation(X, parameters)
+    cost = compute_cost(Y_hat, Y)
     optimizer = tf.train.AdamOptimizer(learning_rate = learning_rate).minimize(cost)
   
     init = tf.global_variables_initializer()
@@ -379,19 +401,11 @@ def pose_model(X_train, Y_train, X_test, Y_test, learning_rate = 0.001,
         parameters = sess.run(parameters)
         print ("Parameters have been trained!")
 
+        eval_accuracy(X, Y, Y_hat, X_train, Y_train, X_test, Y_test, 2.7, 0.8)
+        eval_accuracy(X, Y, Y_hat, X_train, Y_train, X_test, Y_test, 1, 0.5)
+        eval_accuracy(X, Y, Y_hat, X_train, Y_train, X_test, Y_test, 5, 0.8)
 
 
-        # correct_prediction = tf.equal(tf.argmax(Z1), tf.argmax(Y))
-
-        # accuracy = tf.reduce_mean(tf.cast(correct_prediction, "float"))
-
-
-        correct_rot = tf.cast(tf.less(tf.squared_difference(Z3[:3], Y[:3]), [0.8]), "float")
-        correct_trans = tf.cast(tf.less(tf.squared_difference(Z3[3:], Y[3:]), [2.7]), "float")
-        accuracy = tf.reduce_mean(tf.cast(correct_trans, "float"))
-
-        print ("Train Mean Squared Difference:", accuracy.eval({X: X_train, Y: Y_train}))
-        print ("Test Mean Squared Difference:", accuracy.eval({X: X_test, Y: Y_test}))
         
         return parameters
 
@@ -400,6 +414,7 @@ def main():
 
 	if len(args) == 4:
 		if args[0] == '-preprocess':
+      init_maskrcnn()
 			train_file = args[1]
 			test_file = args[2]
 			out_file = args[3]
@@ -430,7 +445,7 @@ def main():
 
 
 
-			parameters = pose_model(X_train, Y_train, X_test, Y_test, learning_rate = 0.001, num_epochs = 5000)
+			parameters = pose_model(X_train, Y_train, X_test, Y_test, learning_rate = 0.001, num_epochs = 10000)
 
 
 
