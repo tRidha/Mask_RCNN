@@ -7,6 +7,7 @@ import skimage.io
 import matplotlib
 import matplotlib.pyplot as plt
 import csv
+import quaternion
 
 class_names = []
 rcnn_model = 0 
@@ -111,8 +112,11 @@ def load_Y_values(csv_filename):
       k = 0
       while k < len(list_of_params):
         pose = list_of_params[k+1:k+7]
-        pose = [float(i) for i in pose] 
-        examples.append(pose)
+        pose = [float(i) for i in pose]
+        translation = pose[3:]
+        euler_rot = np.asarray(pose[:3])
+        quaternion_rot = euler_to_quaternion(euler_rot, 'zyx').tolist()
+        examples.append(quaternion_rot + translation)
         k += 7
 
       examples = sorted(examples,key=lambda x: x[5])
@@ -231,7 +235,7 @@ def initialize_parameters():
     W2 = tf.get_variable("W2", [1024,1024], initializer = tf.contrib.layers.xavier_initializer(seed = 2))
     b2 = tf.get_variable("b2", [1024,1], initializer = tf.zeros_initializer())
     W3 = tf.get_variable("W3", [3,1024], initializer = tf.contrib.layers.xavier_initializer(seed = 3))
-    b3 = tf.get_variable("b3", [3,1], initializer = tf.zeros_initializer())
+    b3 = tf.get_variable("b3", [4,1], initializer = tf.zeros_initializer())
 
     W4 = tf.get_variable("W4", [100,8], initializer = tf.contrib.layers.xavier_initializer(seed = 4))
     b4 = tf.get_variable("b4", [100,1], initializer = tf.zeros_initializer())
@@ -303,15 +307,15 @@ def forward_propagation(X, parameters):
 
 def compute_cost(Z3, Y, alpha = 0.5, threshold = 2.8):
   
-    t_hat = Z3[3:6]
-    t = Y[3:6]
+    t_hat = Z3[4:7]
+    t = Y[4:7]
 
     huber_loss = tf.keras.losses.Huber(delta=threshold)
     t_cost = huber_loss(t, t_hat)
     #  tf.cond(tf.norm(t - t_hat) < threshold, lambda: tf.squared_difference(t, t_hat), lambda : tf.norm(t - t_hat) - (0.5 * threshold))
 
-    r_hat = Z3[:3]
-    r = Y[:3]
+    r_hat = Z3[:4]
+    r = Y[:4]
 
     r_cost = tf.squared_difference(r, r_hat)
 
