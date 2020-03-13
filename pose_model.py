@@ -230,22 +230,21 @@ def create_placeholders(n_x, n_y):
     return X, Y
 
 def initialize_parameters():
-    
-    tf.set_random_seed(1)                   
-    W1 = tf.get_variable("W1", [1024,1032], initializer = tf.contrib.layers.xavier_initializer(seed = 1))
+                     
+    W1 = tf.get_variable("W1", [1024,1032], initializer = tf.contrib.layers.xavier_initializer())
     b1 = tf.get_variable("b1", [1024,1], initializer = tf.zeros_initializer())
-    W2 = tf.get_variable("W2", [1024,1024], initializer = tf.contrib.layers.xavier_initializer(seed = 2))
+    W2 = tf.get_variable("W2", [1024,1024], initializer = tf.contrib.layers.xavier_initializer())
     b2 = tf.get_variable("b2", [1024,1], initializer = tf.zeros_initializer())
-    W3 = tf.get_variable("W3", [4,1024], initializer = tf.contrib.layers.xavier_initializer(seed = 3))
+    W3 = tf.get_variable("W3", [4,1024], initializer = tf.contrib.layers.xavier_initializer())
     b3 = tf.get_variable("b3", [4,1], initializer = tf.zeros_initializer())
 
-    W4 = tf.get_variable("W4", [100,8], initializer = tf.contrib.layers.xavier_initializer(seed = 4))
+    W4 = tf.get_variable("W4", [100,8], initializer = tf.contrib.layers.xavier_initializer())
     b4 = tf.get_variable("b4", [100,1], initializer = tf.zeros_initializer())
-    W5 = tf.get_variable("W5", [100,100], initializer = tf.contrib.layers.xavier_initializer(seed = 5))
+    W5 = tf.get_variable("W5", [100,100], initializer = tf.contrib.layers.xavier_initializer())
     b5 = tf.get_variable("b5", [100,1], initializer = tf.zeros_initializer())
-    W6 = tf.get_variable("W6", [100,1024], initializer = tf.contrib.layers.xavier_initializer(seed = 6))
+    W6 = tf.get_variable("W6", [100,1024], initializer = tf.contrib.layers.xavier_initializer())
     b6 = tf.get_variable("b6", [100,1], initializer = tf.zeros_initializer())
-    W7 = tf.get_variable("W7", [3,200], initializer = tf.contrib.layers.xavier_initializer(seed = 7))
+    W7 = tf.get_variable("W7", [3,200], initializer = tf.contrib.layers.xavier_initializer())
     b7 = tf.get_variable("b7", [3,1], initializer = tf.zeros_initializer())
 
     parameters = {"W1": W1,
@@ -353,8 +352,6 @@ def pose_model(X_train, Y_train, X_test, Y_test, learning_rate = 0.001,
     
     
     ops.reset_default_graph()                         # to be able to rerun the model without overwriting tf variables
-    tf.set_random_seed(1)                             # to keep consistent results
-    seed = 3                                          # to keep consistent results
     (n_x, m) = X_train.shape                          # (n_x: input size, m : number of examples in the train set)
     n_y = Y_train.shape[0]                            # n_y : output size
     costs = []                                        # To keep track of the cost
@@ -367,6 +364,8 @@ def pose_model(X_train, Y_train, X_test, Y_test, learning_rate = 0.001,
     optimizer = tf.train.AdamOptimizer(learning_rate = learning_rate).minimize(cost)
   
     init = tf.global_variables_initializer()
+
+    saver = tf.train.Saver()
   
     with tf.Session() as sess:
         
@@ -394,6 +393,8 @@ def pose_model(X_train, Y_train, X_test, Y_test, learning_rate = 0.001,
                 print ("Cost after epoch %i: %f" % (epoch, minibatch_cost))
             if print_cost == True and epoch >= 1000 and epoch % 5 == 0:
                 costs.append(minibatch_cost)
+
+            saved_path = saver.save(sess, './pose-model')
                 
         
         plt.plot(np.squeeze(costs))
@@ -404,6 +405,9 @@ def pose_model(X_train, Y_train, X_test, Y_test, learning_rate = 0.001,
 
         
         parameters = sess.run(parameters)
+
+
+
         print ("Parameters have been trained!")
 
         eval_accuracy(X, Y, Y_hat, X_train, Y_train, X_test, Y_test, 2.7, 0.8)
