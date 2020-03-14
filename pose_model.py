@@ -572,6 +572,11 @@ def run_model(X, model_path):
     saver = tf.train.Saver()
 
     with tf.Session() as sess:
+    	saver.restore(sess, './' + model_path)
+    	parameters = sess.run(parameters)
+    	outputs = sess.run(Y)
+    	print(outputs)
+
 
 def main():
   args = sys.argv[1:]
@@ -608,10 +613,11 @@ def main():
 
       parameters = pose_model(X_train, Y_train, X_test, Y_test, learning_rate = 0.001, num_epochs = 10000, out_file)
 
-    if args[0] == '-eval':
-      pass
 
   if args[0] == '-detect':
+  	image_path = args[1]
+  	model_path = args[2]
+  	detect(image_path, model_path)
 
 
 
