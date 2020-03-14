@@ -6,9 +6,11 @@ from math import sin, cos
 import numpy as np
 import skimage.io
 import matplotlib
+matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 import csv
 from squaternion import euler2quat, quat2euler, Quaternion
+import tensorflow_graphics.geometry.transformation.quaternion as tfq
 
 from PIL import ImageDraw, Image
 import cv2
@@ -306,9 +308,9 @@ def visualize_poses(poses):
 import tensorflow as tf
 from tensorflow.python.framework import ops
 
-# placeholders x y, forward prop z1, cost function mse loss = tf.reduce_mean(tf.squared_difference(prediction, Y)) 
-# loss = tf.nn.l2_loss(prediction - Y),
-# backprop tf.train.Adamoptimizer
+def tf_rad2deg(rad):
+  pi_on_180 = 0.017453292519943295
+  return rad / pi_on_180
 
 def create_placeholders(n_x, n_y):
 
@@ -416,8 +418,18 @@ def compute_cost(Z3, Y, alpha = 0.5, threshold = 2.8):
     return cost
 
 def eval_accuracy(X, Y, Y_hat, X_train, Y_train, X_test, Y_test, t_treshold, r_threshold):
-  correct_rot = tf.cast(tf.less(tf.square(tf.norm(Y[:4] - Y_hat[:4], axis = 0)), [r_threshold]), "float")
-  correct_trans = tf.cast(tf.less(tf.square(tf.norm(Y[4:] - Y_hat[4:], axis = 0)), [t_treshold]), "float")
+  # Have to swap axes due to how tensorflow quaternions work
+  Yq = tf.transpose(Y[:4], [1, 0])
+  Yq_hat = tf.transpose(Y_hat[:4], [1, 0])
+  # Compute difference quaternion then swap axes back
+  diff = tfq.multiply(tfq.normalize(Yq), tfq.inverse(tfq.normalize(Yq_hat)))
+  diff = tf.transpose(diff, [1, 0])
+  # Compute angle difference in degrees
+  diffW = tf.clip_by_value(diff[3], clip_value_min=-1.0, clip_value_max=1.0)
+  angle_diff = tf_rad2deg(math.pi - tf.math.abs(2 * tf.math.acos(diffW) - math.pi))
+
+  correct_rot = tf.cast(tf.less(angle_diff, [r_threshold]), "float")
+  correct_trans = tf.cast(tf.less(tf.norm(Y[4:] - Y_hat[4:], axis = 0), [t_treshold]), "float")
   t_accuracy = tf.reduce_mean(tf.cast(correct_trans, "float"))
   r_accuracy = tf.reduce_mean(tf.cast(correct_rot, "float"))
   accuracy = tf.reduce_mean(tf.cast(correct_trans * correct_rot, "float"))
@@ -438,7 +450,7 @@ def eval_accuracy(X, Y, Y_hat, X_train, Y_train, X_test, Y_test, t_treshold, r_t
   print('\n--------------')
 
 def pose_model(X_train, Y_train, X_test, Y_test, learning_rate = 0.001,
-          num_epochs = 1000, print_cost = True):
+          num_epochs = 1000, print_cost = True, savefile = 'pose-model'):
     
     
     ops.reset_default_graph()                         # to be able to rerun the model without overwriting tf variables
@@ -459,15 +471,13 @@ def pose_model(X_train, Y_train, X_test, Y_test, learning_rate = 0.001,
   
     with tf.Session() as sess:
         
-        
+        # saver.restore(sess, './' + savefile)
         sess.run(init)
         
         
         for epoch in range(num_epochs):
 
-            epoch_cost = 0.                       
-             
-            seed = seed + 1
+            epoch_cost = 0.
             
 
             #for minibatch in minibatches:
@@ -500,9 +510,9 @@ def pose_model(X_train, Y_train, X_test, Y_test, learning_rate = 0.001,
 
         print ("Parameters have been trained!")
 
-        eval_accuracy(X, Y, Y_hat, X_train, Y_train, X_test, Y_test, 2.7, 0.8)
-        eval_accuracy(X, Y, Y_hat, X_train, Y_train, X_test, Y_test, 1, 0.5)
-        eval_accuracy(X, Y, Y_hat, X_train, Y_train, X_test, Y_test, 5, 0.8)
+        eval_accuracy(X, Y, Y_hat, X_train, Y_train, X_test, Y_test, 2.7, 50)
+        eval_accuracy(X, Y, Y_hat, X_train, Y_train, X_test, Y_test, 1, 40)
+        eval_accuracy(X, Y, Y_hat, X_train, Y_train, X_test, Y_test, 5, 50)
 
 
         
@@ -563,7 +573,6 @@ def run_model(X, model_path):
 
     with tf.Session() as sess:
 
-
 def main():
   args = sys.argv[1:]
 
@@ -572,7 +581,7 @@ def main():
       init_maskrcnn()
       train_file = args[1]
       test_file = args[2]
-      out_file = args[3]
+      out_file = args[3] 
       tr_file_examples, tr_filenames = load_Y_values(TRAIN_CSV)
       X_train, Y_train = extract_bounding_box_info(rcnn_model, tr_filenames, tr_file_examples)
 
@@ -597,7 +606,10 @@ def main():
       print('Files loaded!')
       print('Training model...')
 
-      parameters = pose_model(X_train, Y_train, X_test, Y_test, learning_rate = 0.001, num_epochs = 10000)
+      parameters = pose_model(X_train, Y_train, X_test, Y_test, learning_rate = 0.001, num_epochs = 10000, out_file)
+
+    if args[0] == '-eval':
+      pass
 
   if args[0] == '-detect':
 
