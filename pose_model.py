@@ -2,12 +2,16 @@ import os
 import sys
 import random
 import math
+from math import sin, cos
 import numpy as np
 import skimage.io
 import matplotlib
 import matplotlib.pyplot as plt
 import csv
 from squaternion import euler2quat, quat2euler, Quaternion
+
+from PIL import ImageDraw, Image
+import cv2
 
 class_names = []
 rcnn_model = 0 
@@ -211,6 +215,92 @@ def extract_bounding_box_info(rcnn_model, filenames, file_examples, show_images 
         
 
   return X, Y
+
+# ---------------------------------------- Displaying Pose in 2D Image ---------------------------------------- #
+# Code largely pulled from this notebook:
+# https://www.kaggle.com/zstusnoopy/visualize-the-location-and-3d-bounding-box-of-car
+
+# convert euler angle to rotation matrix
+def euler_to_Rot(yaw, pitch, roll):
+    Y = np.array([[cos(yaw), 0, sin(yaw)],
+                  [0, 1, 0],
+                  [-sin(yaw), 0, cos(yaw)]])
+    P = np.array([[1, 0, 0],
+                  [0, cos(pitch), -sin(pitch)],
+                  [0, sin(pitch), cos(pitch)]])
+    R = np.array([[cos(roll), -sin(roll), 0],
+                  [sin(roll), cos(roll), 0],
+                  [0, 0, 1]])
+    return np.dot(Y, np.dot(P, R))
+
+def draw_line(image, points):
+    color = (255, 0, 0)
+    cv2.line(image, tuple(points[1][:2]), tuple(points[2][:2]), color, 16)
+    cv2.line(image, tuple(points[1][:2]), tuple(points[4][:2]), color, 16)
+
+    cv2.line(image, tuple(points[1][:2]), tuple(points[5][:2]), color, 16)
+    cv2.line(image, tuple(points[2][:2]), tuple(points[3][:2]), color, 16)
+    cv2.line(image, tuple(points[2][:2]), tuple(points[6][:2]), color, 16)
+    cv2.line(image, tuple(points[3][:2]), tuple(points[4][:2]), color, 16)
+    cv2.line(image, tuple(points[3][:2]), tuple(points[7][:2]), color, 16)
+
+    cv2.line(image, tuple(points[4][:2]), tuple(points[8][:2]), color, 16)
+    cv2.line(image, tuple(points[5][:2]), tuple(points[8][:2]), color, 16)
+
+    cv2.line(image, tuple(points[5][:2]), tuple(points[6][:2]), color, 16)
+    cv2.line(image, tuple(points[6][:2]), tuple(points[7][:2]), color, 16)
+    cv2.line(image, tuple(points[7][:2]), tuple(points[8][:2]), color, 16)
+    return image
+
+
+def draw_points(image, points):
+    image = np.array(image)
+    for (p_x, p_y, p_z) in points:
+        # print("p_x, p_y", p_x, p_y)
+        cv2.circle(image, (p_x, p_y), 5, (255, 0, 0), -1)
+    return image
+
+def visualize_poses(poses):
+	
+	car_poses = []
+
+	for pose in poses:
+		quat = pose[:4]
+		roll, pitch, yaw = quat2euler(quat)
+		
+		car_poses.append((yaw, pitch, roll, pose[4], pose[5], pose[6]))
+
+	x_l = 1.02
+	y_l = 0.80
+	z_l = 2.31
+	for yaw, pitch, roll, x, y, z in car_poses:
+	    # I think the pitch and yaw should be exchanged
+	    yaw, pitch, roll = -pitch, -yaw, -roll
+	    Rt = np.eye(4)
+	    t = np.array([x, y, z])
+	    Rt[:3, 3] = t
+	    Rt[:3, :3] = euler_to_Rot(yaw, pitch, roll).T
+	    Rt = Rt[:3, :]
+	    P = np.array([[0, 0, 0, 1],
+	                  [x_l, y_l, -z_l, 1],
+	                  [x_l, y_l, z_l, 1],
+	                  [-x_l, y_l, z_l, 1],
+	                  [-x_l, y_l, -z_l, 1],
+	                  [x_l, -y_l, -z_l, 1],
+	                  [x_l, -y_l, z_l, 1],
+	                  [-x_l, -y_l, z_l, 1],
+	                  [-x_l, -y_l, -z_l, 1]]).T
+	    img_cor_points = np.dot(k, np.dot(Rt, P))
+	    img_cor_points = img_cor_points.T
+	    img_cor_points[:, 0] /= img_cor_points[:, 2]
+	    img_cor_points[:, 1] /= img_cor_points[:, 2]
+	    img_cor_points = img_cor_points.astype(int)
+	    img = draw_points(img, img_cor_points)
+	    img = draw_line(img, img_cor_points)
+	    
+	img = Image.fromarray(img)
+	plt.imshow(img)
+	plt.show()
 
 # ---------------------------------------- Model Implementation ---------------------------------------- #
 import tensorflow as tf
@@ -418,6 +508,62 @@ def pose_model(X_train, Y_train, X_test, Y_test, learning_rate = 0.001,
         
         return parameters
 
+def detect(image_path, model_path):
+	image = skimage.io.imread(image_path)
+
+    height = image.shape[0]
+    width = image.shape[1]
+  
+    # Run detection through Mask-RCNN
+    results = rcnn_model.detect([image])
+    r = results[0]
+    rois = r['rois']
+    car_inputs = []
+
+    for i in range(len(rois)):
+    	if r['class_ids'][i] == car_class_id:
+    		y1,x1,y2,x2 = rois[i][0]
+
+		# normalize
+		x1 = (x1 - (width/2)) / (width/2)
+		x2 = (x2 - (width/2)) / (width/2)
+		y1 = (y1 - (height/2)) / (height/2)
+		y2 = (y2 - (height/2)) / (height/2)
+		center_x = (x1 + x2) / 2
+		center_y = (y1 + y2) / 2
+		area = (x2 - x1) * (y2 - y1)
+		width_to_height_ratio = (x2 - x1) / (y2 - y1)
+
+		# Removes the camera car from consideration
+		if not (y2 > 0.9 and center_x >= -.5 and center_x <= 0.5):
+			bounding_box = np.asarray([x1, x2, y1, y2, center_x, center_y, area, width_to_height_ratio])
+			feature_vec = r['features'][index].flatten()
+
+			tr_example = np.concatenate([bounding_box, feature_vec])
+			car_inputs.append(tr_example)
+
+	X = np.asarray(car_inputs).T
+
+	# Run through trained model
+	poses = run_model(X, model_path)
+	visualize_poses(poses)
+
+def run_model(X, model_path):
+	ops.reset_default_graph()
+    (n_x, m) = X.shape
+    
+  
+    X = create_placeholders(n_x)
+    parameters = initialize_parameters()
+    Y = forward_propagation(X, parameters)
+  
+    init = tf.global_variables_initializer()
+
+    saver = tf.train.Saver()
+
+    with tf.Session() as sess:
+
+
 def main():
   args = sys.argv[1:]
 
@@ -452,6 +598,8 @@ def main():
       print('Training model...')
 
       parameters = pose_model(X_train, Y_train, X_test, Y_test, learning_rate = 0.001, num_epochs = 10000)
+
+  if args[0] == '-detect':
 
 
 
