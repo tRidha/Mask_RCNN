@@ -89,19 +89,18 @@ fx = 2304.5479
 fy = 2305.8757
 cx = 1686.2379
 cy = 1354.9849
+cam_matrix = np.array([[fx, 0, cx],
+              [0, fy, cy],
+              [0, 0, 1]], dtype=np.float32)
 
 def pose_to_pixel(x, y, z):
-  K = np.array([[fx, 0, cx],
-                [0, fy, cy],
-                [0, 0, 1]])
-
   R = np.array([[1, 0, 0, 0],
                 [0, 1, 0, 0,],
                 [0, 0, 1, 0]])
 
   W = np.array([[x], [y], [z], [1]])
 
-  p = np.dot(np.dot(K, R), W)
+  p = np.dot(np.dot(cam_matrix, R), W)
   p_z = p/z
   return p_z
 
@@ -237,21 +236,21 @@ def euler_to_Rot(yaw, pitch, roll):
 
 def draw_line(image, points):
     color = (255, 0, 0)
-    cv2.line(image, tuple(points[1][:2]), tuple(points[2][:2]), color, 16)
-    cv2.line(image, tuple(points[1][:2]), tuple(points[4][:2]), color, 16)
+    cv2.line(image, tuple(points[1][:2]), tuple(points[2][:2]), color, 4)
+    cv2.line(image, tuple(points[1][:2]), tuple(points[4][:2]), color, 4)
 
-    cv2.line(image, tuple(points[1][:2]), tuple(points[5][:2]), color, 16)
-    cv2.line(image, tuple(points[2][:2]), tuple(points[3][:2]), color, 16)
-    cv2.line(image, tuple(points[2][:2]), tuple(points[6][:2]), color, 16)
-    cv2.line(image, tuple(points[3][:2]), tuple(points[4][:2]), color, 16)
-    cv2.line(image, tuple(points[3][:2]), tuple(points[7][:2]), color, 16)
+    cv2.line(image, tuple(points[1][:2]), tuple(points[5][:2]), color, 4)
+    cv2.line(image, tuple(points[2][:2]), tuple(points[3][:2]), color, 4)
+    cv2.line(image, tuple(points[2][:2]), tuple(points[6][:2]), color, 4)
+    cv2.line(image, tuple(points[3][:2]), tuple(points[4][:2]), color, 4)
+    cv2.line(image, tuple(points[3][:2]), tuple(points[7][:2]), color, 4)
 
-    cv2.line(image, tuple(points[4][:2]), tuple(points[8][:2]), color, 16)
-    cv2.line(image, tuple(points[5][:2]), tuple(points[8][:2]), color, 16)
+    cv2.line(image, tuple(points[4][:2]), tuple(points[8][:2]), color, 4)
+    cv2.line(image, tuple(points[5][:2]), tuple(points[8][:2]), color, 4)
 
-    cv2.line(image, tuple(points[5][:2]), tuple(points[6][:2]), color, 16)
-    cv2.line(image, tuple(points[6][:2]), tuple(points[7][:2]), color, 16)
-    cv2.line(image, tuple(points[7][:2]), tuple(points[8][:2]), color, 16)
+    cv2.line(image, tuple(points[5][:2]), tuple(points[6][:2]), color, 4)
+    cv2.line(image, tuple(points[6][:2]), tuple(points[7][:2]), color, 4)
+    cv2.line(image, tuple(points[7][:2]), tuple(points[8][:2]), color, 4)
     return image
 
 
@@ -262,47 +261,49 @@ def draw_points(image, points):
         cv2.circle(image, (p_x, p_y), 5, (255, 0, 0), -1)
     return image
 
-def visualize_poses(poses):
-	
-	car_poses = []
+def visualize_poses(img, poses):
+  # poses = np.asarray([0.140419, 0.1], -0.0224375, -3.07343, -5.83187, 4.71606, 20.5524])
+  car_poses = []
 
-	for pose in poses:
-		quat = pose[:4]
-		roll, pitch, yaw = quat2euler(quat)
-		
-		car_poses.append((yaw, pitch, roll, pose[4], pose[5], pose[6]))
+  for pose in poses:
+    quat = pose[:4]
+    quat = quat / np.linalg.norm(quat)
+    roll, pitch, yaw = quat2euler(*quat)
 
-	x_l = 1.02
-	y_l = 0.80
-	z_l = 2.31
-	for yaw, pitch, roll, x, y, z in car_poses:
-	    # I think the pitch and yaw should be exchanged
-	    yaw, pitch, roll = -pitch, -yaw, -roll
-	    Rt = np.eye(4)
-	    t = np.array([x, y, z])
-	    Rt[:3, 3] = t
-	    Rt[:3, :3] = euler_to_Rot(yaw, pitch, roll).T
-	    Rt = Rt[:3, :]
-	    P = np.array([[0, 0, 0, 1],
-	                  [x_l, y_l, -z_l, 1],
-	                  [x_l, y_l, z_l, 1],
-	                  [-x_l, y_l, z_l, 1],
-	                  [-x_l, y_l, -z_l, 1],
-	                  [x_l, -y_l, -z_l, 1],
-	                  [x_l, -y_l, z_l, 1],
-	                  [-x_l, -y_l, z_l, 1],
-	                  [-x_l, -y_l, -z_l, 1]]).T
-	    img_cor_points = np.dot(k, np.dot(Rt, P))
-	    img_cor_points = img_cor_points.T
-	    img_cor_points[:, 0] /= img_cor_points[:, 2]
-	    img_cor_points[:, 1] /= img_cor_points[:, 2]
-	    img_cor_points = img_cor_points.astype(int)
-	    img = draw_points(img, img_cor_points)
-	    img = draw_line(img, img_cor_points)
-	    
-	img = Image.fromarray(img)
-	plt.imshow(img)
-	plt.show()
+    car_poses.append((yaw, pitch, roll, pose[4], pose[5], pose[6]))
+
+  x_l = 1.02
+  y_l = 0.80
+  z_l = 2.31
+  for yaw, pitch, roll, x, y, z in car_poses:
+      # I think the pitch and yaw should be exchanged
+      yaw, pitch, roll = -pitch, -yaw, -roll
+      Rt = np.eye(4)
+      t = np.array([x, y, z])
+      Rt[:3, 3] = t
+      Rt[:3, :3] = euler_to_Rot(yaw, pitch, roll).T
+      Rt = Rt[:3, :]
+      P = np.array([[0, 0, 0, 1],
+                    [x_l, y_l, -z_l, 1],
+                    [x_l, y_l, z_l, 1],
+                    [-x_l, y_l, z_l, 1],
+                    [-x_l, y_l, -z_l, 1],
+                    [x_l, -y_l, -z_l, 1],
+                    [x_l, -y_l, z_l, 1],
+                    [-x_l, -y_l, z_l, 1],
+                    [-x_l, -y_l, -z_l, 1]]).T
+
+      img_cor_points = np.dot(cam_matrix, np.dot(Rt, P))
+      img_cor_points = img_cor_points.T
+      img_cor_points[:, 0] /= img_cor_points[:, 2]
+      img_cor_points[:, 1] /= img_cor_points[:, 2]
+      img_cor_points = img_cor_points.astype(int)
+      img = draw_points(img, img_cor_points)
+      img = draw_line(img, img_cor_points)
+      
+  img = Image.fromarray(img)
+  plt.imshow(img)
+  plt.show()
 
 # ---------------------------------------- Model Implementation ---------------------------------------- #
 import tensorflow as tf
@@ -398,7 +399,7 @@ def forward_propagation(X, parameters):
                                                 
     return Y_hat
 
-def compute_cost(Z3, Y, alpha = 0.5, threshold = 2.8):
+def compute_cost(Z3, Y, alpha = 0.8, threshold = 2.8):
   
     t_hat = Z3[4:7]
     t = Y[4:7]
@@ -410,8 +411,7 @@ def compute_cost(Z3, Y, alpha = 0.5, threshold = 2.8):
     r_hat = Z3[:4]
     r = Y[:4]
 
-    r_cost = tf.squared_difference(r, r_hat)
-
+    r_cost = tf.norm(r - (r_hat / tf.norm(r_hat, axis = 0)), axis = 0)
     cost = tf.reduce_mean(((1-alpha) * t_cost) + (alpha * r_cost))
     #cost = tf.reduce_mean(tf.nn.cross_entropy_with_logits(logits = logits, labels = labels))
     
@@ -519,64 +519,69 @@ def pose_model(X_train, Y_train, X_test, Y_test, learning_rate = 0.001,
         return parameters
 
 def detect(image_path, model_path):
-	image = skimage.io.imread(image_path)
+  car_class_id = class_names.index('car')
+  image = skimage.io.imread(image_path)
 
-    height = image.shape[0]
-    width = image.shape[1]
-  
-    # Run detection through Mask-RCNN
-    results = rcnn_model.detect([image])
-    r = results[0]
-    rois = r['rois']
-    car_inputs = []
+  height = image.shape[0]
+  width = image.shape[1]
 
-    for i in range(len(rois)):
-    	if r['class_ids'][i] == car_class_id:
-    		y1,x1,y2,x2 = rois[i][0]
+  # Run detection through Mask-RCNN
+  results = rcnn_model.detect([image])
+  r = results[0]
+  rois = r['rois']
+  car_inputs = []
 
-		# normalize
-		x1 = (x1 - (width/2)) / (width/2)
-		x2 = (x2 - (width/2)) / (width/2)
-		y1 = (y1 - (height/2)) / (height/2)
-		y2 = (y2 - (height/2)) / (height/2)
-		center_x = (x1 + x2) / 2
-		center_y = (y1 + y2) / 2
-		area = (x2 - x1) * (y2 - y1)
-		width_to_height_ratio = (x2 - x1) / (y2 - y1)
+  for i in range(len(rois)):
+    if r['class_ids'][i] == car_class_id:
+      y1,x1,y2,x2 = rois[i]
 
-		# Removes the camera car from consideration
-		if not (y2 > 0.9 and center_x >= -.5 and center_x <= 0.5):
-			bounding_box = np.asarray([x1, x2, y1, y2, center_x, center_y, area, width_to_height_ratio])
-			feature_vec = r['features'][index].flatten()
+      # normalize
+      x1 = (x1 - (width/2)) / (width/2)
+      x2 = (x2 - (width/2)) / (width/2)
+      y1 = (y1 - (height/2)) / (height/2)
+      y2 = (y2 - (height/2)) / (height/2)
+      center_x = (x1 + x2) / 2
+      center_y = (y1 + y2) / 2
+      area = (x2 - x1) * (y2 - y1)
+      width_to_height_ratio = (x2 - x1) / (y2 - y1)
 
-			tr_example = np.concatenate([bounding_box, feature_vec])
-			car_inputs.append(tr_example)
+      # Removes the camera car from consideration
+      if not (y2 > 0.9 and center_x >= -.5 and center_x <= 0.5):
+      	bounding_box = np.asarray([x1, x2, y1, y2, center_x, center_y, area, width_to_height_ratio])
+      	feature_vec = r['features'][i].flatten()
 
-	X = np.asarray(car_inputs).T
+      	tr_example = np.concatenate([bounding_box, feature_vec])
+      	car_inputs.append(tr_example)
 
-	# Run through trained model
-	poses = run_model(X, model_path)
-	visualize_poses(poses)
+  X = np.asarray(car_inputs).T
+  print(X)
+  print(X.shape)
 
-def run_model(X, model_path):
-	ops.reset_default_graph()
-    (n_x, m) = X.shape
-    
-  
-    X = create_placeholders(n_x)
-    parameters = initialize_parameters()
-    Y = forward_propagation(X, parameters)
-  
-    init = tf.global_variables_initializer()
+  # Run through trained model
+  poses = run_model(X, model_path)
 
-    saver = tf.train.Saver()
+  # Visualize
+  visualize_poses(image, poses.T)
 
-    with tf.Session() as sess:
-    	saver.restore(sess, './' + model_path)
-    	parameters = sess.run(parameters)
-    	outputs = sess.run(Y)
-    	print(outputs)
+def run_model(X_in, model_path):
+  ops.reset_default_graph()
+  (n_x, m) = X_in.shape
 
+
+  X, Y = create_placeholders(n_x, 0)
+  parameters = initialize_parameters()
+  Y_hat = forward_propagation(X, parameters)
+
+  init = tf.global_variables_initializer()
+
+  saver = tf.train.Saver()
+
+  with tf.Session() as sess:
+    saver.restore(sess, './' + model_path)
+    parameters = sess.run(parameters)
+    outputs = Y_hat.eval({X: X_in})
+    print(outputs)
+    return outputs
 
 def main():
   args = sys.argv[1:]
@@ -608,16 +613,18 @@ def main():
       X_train = np.loadtxt(in_file + '_xtrain.csv', delimiter = ',')
       Y_test = np.loadtxt(in_file + '_ytest.csv', delimiter = ',')
       X_test = np.loadtxt(in_file + '_xtest.csv', delimiter = ',')
+      print(Y_train.T)
       print('Files loaded!')
       print('Training model...')
 
-      parameters = pose_model(X_train, Y_train, X_test, Y_test, learning_rate = 0.001, num_epochs = 10000, out_file)
+      parameters = pose_model(X_train, Y_train, X_test, Y_test, learning_rate = 0.001, num_epochs = 10000, savefile = out_file)
 
 
   if args[0] == '-detect':
-  	image_path = args[1]
-  	model_path = args[2]
-  	detect(image_path, model_path)
+    init_maskrcnn()
+    image_path = args[1]
+    model_path = args[2]
+    detect(image_path, model_path)
 
 
 
